@@ -299,7 +299,7 @@ void initialize_opengl()
 
 GLProgram *compile_glsl_program(std::string source)
 {
-  return nullptr;
+  TI_NOT_IMPLEMENTED
 }
 #endif
 
