@@ -18,6 +18,7 @@ class Matrix(TaichiOperations):
                  m=1,
                  dt=None,
                  shape=None,
+                 offset=None,
                  empty=False,
                  layout=None,
                  needs_grad=False,
@@ -101,6 +102,12 @@ class Matrix(TaichiOperations):
         if shape is not None:
             if isinstance(shape, numbers.Number):
                 shape = (shape, )
+            if isinstance(offset, numbers.Number):
+                offset = (offset, )
+
+            if offset is not None:
+                assert len(shape) == len(offset), "The dims of shape and offset should keep consistent but now %d != %d" % (len(shape), len(offset))
+
             import taichi as ti
             if layout is None:
                 layout = ti.AOS
@@ -108,9 +115,9 @@ class Matrix(TaichiOperations):
             dim = len(shape)
             if layout.soa:
                 for i, e in enumerate(self.entries):
-                    ti.root.dense(ti.index_nd(dim), shape).place(e)
+                    ti.root.dense(ti.index_nd(dim), shape).place(e, offset=offset)
                     if needs_grad:
-                        ti.root.dense(ti.index_nd(dim), shape).place(e.grad)
+                        ti.root.dense(ti.index_nd(dim), shape).place(e.grad, offset=offset)
             else:
                 var_list = []
                 for i, e in enumerate(self.entries):
@@ -118,8 +125,11 @@ class Matrix(TaichiOperations):
                 if needs_grad:
                     for i, e in enumerate(self.entries):
                         var_list.append(e.grad)
-                ti.root.dense(ti.index_nd(dim), shape).place(*tuple(var_list))
-
+                ti.root.dense(ti.index_nd(dim), shape).place(*tuple(var_list), offset=offset)
+        else:
+            if offset is not None:
+                raise ValueError("shape can not be None when offset is being set") 
+                
     def is_global(self):
         results = [False for _ in self.entries]
         for i, e in enumerate(self.entries):
@@ -602,8 +612,8 @@ class Matrix(TaichiOperations):
         return c
 
 
-def Vector(n=1, dt=None, shape=None, **kwargs):
-    return Matrix(n, 1, dt, shape, **kwargs)
+def Vector(n=1, dt=None, shape=None, offset=None, **kwargs):
+    return Matrix(n, 1, dt, shape, offset=None, **kwargs)
 
 
 Vector.zero = Matrix.zero

@@ -5,7 +5,7 @@ import taichi as ti
 def test_accessor():
     a = ti.var(dt=ti.i32)
 
-    ti.root.dense(ti.ijkl, 128).place(a, offset=(1024, 2048, 2100, 2200))
+    ti.root.dense(ti.ijkl, 168).place(a, offset=(10-64, 2048, 2100, 2200))
 
     a[1029, 2100, 2200, 2300] = 1
     assert a[1029, 2100, 2200, 2300] == 1
@@ -15,7 +15,7 @@ def test_accessor():
 def test_struct_for_huge_offsets():
     a = ti.var(dt=ti.i32)
 
-    offset = 1024, 2048, 2100, 2200
+    offset = 10-64, 2048, 2100, 2200
     ti.root.dense(ti.ijkl, 4).place(a, offset=offset)
 
     @ti.kernel
@@ -49,3 +49,33 @@ def test_struct_for_negative():
     for i in range(16, 48):
         for j in range(-16, 16):
             assert a[i, j] == i + j * 10
+
+@ti.all_archs
+def test_offset_wrapper_for_var():
+    # for ti.var
+    a = ti.var(dt=ti.i32, shape = 16, offset = -48)
+    a = ti.var(dt=ti.i32, shape = (16,), offset = (16,))
+    a = ti.var(dt=ti.i32, shape = (16, 64), offset = (-16, -64))
+    a = ti.var(dt=ti.i32, shape = (16, 64), offset = None)
+
+    # illegal cases
+    try:
+        a = ti.var(dt=ti.float32, shape = 3, offset = (3, 4))
+        a = ti.var(dt=ti.float32, shape = None, offset = (3, 4))
+    except AssertionError as e:
+        ti.info("Oops! the offset and shape should keep consistent when ti.var is initialized")
+        print(e)
+
+@ti.all_archs
+def test_offset_wrapper_for_matrix():
+    # for ti.matrix, wrapper for key offset 
+    a = ti.Matrix(dt=ti.i32, shape = (32, 16, 8), offset = (-8, -16, -32))
+    a = ti.Matrix(dt=ti.i32, shape = (32, 16, 8), offset = None)
+
+    # illegal cases
+    try : 
+        a = ti.Matrix(dt=ti.i32, shape = (32, 16, 8), offset = (32, 16))
+        a = ti.Matrix(dt=ti.i32, shape = None, offset = (32, 16))
+    except AssertionError as e:
+        ti.info("Oops! the offset and shape should keep consistent when ti.Matrix is initialized")
+        print(e)
