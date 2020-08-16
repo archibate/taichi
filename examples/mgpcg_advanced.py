@@ -1,3 +1,5 @@
+# Generalized MGPCG possion solver, originally created by @KLozes
+
 import taichi as ti
 import numpy as np
 
@@ -92,6 +94,15 @@ class MGPCG:
             if (I.sum()) & 1 == phase:
                 self.z[l][I] = (self.r[l][I] + self.neighbor_sum(
                     self.z[l], I)) / (2.0 * self.dim)
+
+    @ti.func
+    def init_bc(self, I, b):
+        I = I + self.N_ext  # TODO: consider make use of :ref:`offset`?
+        self.r[0][I] = b
+        self.z[0][I] = 0.0
+        self.Ap[I] = 0.0
+        self.p[I] = 0.0
+        self.x[I] = 0.0
 
     def apply_preconditioner(self):
         self.z[0].fill(0)
@@ -203,16 +214,11 @@ class MGPCGTest1(MGPCG):
 
     @ti.kernel
     def init(self):
-        for I in ti.grouped(
-                ti.ndrange(*((self.N_ext, self.N_tot - self.N_ext), ) * self.dim)):
-            self.r[0][I] = 5.0
+        for I in ti.grouped(ti.ndrange(*(self.N, ) * self.dim)):
+            b = 6.0
             for k in ti.static(range(self.dim)):
-                self.r[0][I] *= ti.cos(2.0 * np.pi * (I[k] - self.N_ext) *
-                                       5.0 / self.N_tot)
-            self.z[0][I] = 0.0
-            self.Ap[I] = 0.0
-            self.p[I] = 0.0
-            self.x[I] = 0.0
+                b *= ti.cos(2.0 * np.pi * I[k] * 5.0 / self.N_tot)
+            self.init_bc(I, b)
 
     @ti.kernel
     def paint(self):
@@ -248,12 +254,8 @@ class MGPCGTest2(MGPCG):
 
     @ti.kernel
     def init(self):
-        for I in ti.grouped(ti.ndrange(*((self.N_ext, self.N_tot - self.N_ext), ) * self.dim)):
-            self.r[0][I] = self.bound[I - self.N_ext]
-            self.z[0][I] = 0.0
-            self.Ap[I] = 0.0
-            self.p[I] = 0.0
-            self.x[I] = 0.0
+        for I in ti.grouped(self.bound):
+            self.init_bc(I, self.bound[I])
 
     @ti.kernel
     def touch(self, x: float, y: float):
@@ -270,6 +272,6 @@ class MGPCGTest2(MGPCG):
 
 
 if __name__ == '__main__':
-    ti.init(default_fp=ti.f32, arch=ti.cpu, kernel_profiler=True)
+    ti.init(arch=ti.cpu, kernel_profiler=True)
     solver = MGPCGTest2()
     solver.run()
