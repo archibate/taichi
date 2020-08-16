@@ -1,4 +1,5 @@
 import taichi as ti
+import numpy as np
 
 
 @ti.data_oriented
@@ -170,7 +171,7 @@ class MGPCG:
 
 
 @ti.data_oriented
-class MGPCGTest(MGPCG):
+class MGPCGTest1(MGPCG):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -203,12 +204,11 @@ class MGPCGTest(MGPCG):
 
     @ti.kernel
     def init(self):
-        import math
         for I in ti.grouped(
                 ti.ndrange(*((self.N_ext, self.N_tot - self.N_ext), ) * self.dim)):
             self.r[0][I] = 5.0
             for k in ti.static(range(self.dim)):
-                self.r[0][I] *= ti.cos(2.0 * math.pi * (I[k] - self.N_ext) *
+                self.r[0][I] *= ti.cos(2.0 * np.pi * (I[k] - self.N_ext) *
                                        5.0 / self.N_tot)
             self.z[0][I] = 0.0
             self.Ap[I] = 0.0
@@ -225,7 +225,53 @@ class MGPCGTest(MGPCG):
                 self.pixels[i, j] = self.x[ii, jj, kk] / self.N_tot
 
 
+@ti.data_oriented
+class MGPCGTest2(MGPCG):
+    def __init__(self):
+        super().__init__(dim=2, N=512, n_mg_levels=6)
+
+        self.N_gui = 512  # gui resolution
+        self.bound = ti.field(float, (self.N, ) * self.dim)  # boundary conditions
+        self.pixels = ti.field(float, (self.N_gui, self.N_gui))  # image buffer
+
+    def run(self):
+        self.gui = ti.GUI("Multigrid Preconditioned Conjugate Gradients",
+                     (self.N_gui, self.N_gui))
+        self.per_step_callback = print
+
+        while self.gui.running and not self.gui.get_event(self.gui.ESCAPE):
+            mx, my = self.gui.get_cursor_pos()
+            self.touch(mx, my)
+            self.init()
+            self.solve(1)
+            self.paint()
+            self.gui.set_image(self.pixels)
+            self.gui.show()
+
+    @ti.kernel
+    def init(self):
+        for I in ti.grouped(ti.ndrange(*((self.N_ext, self.N_tot - self.N_ext), ) * self.dim)):
+            self.r[0][I] = self.bound[I - self.N_ext]
+            self.z[0][I] = 0.0
+            self.Ap[I] = 0.0
+            self.p[I] = 0.0
+            self.x[I] = 0.0
+
+    @ti.kernel
+    def touch(self, x: float, y: float):
+        for I in ti.grouped(self.bound):
+            self.bound[I] = 1.0 * ti.exp(-400.0 * (I / self.N - ti.Vector([x, y])).norm_sqr())
+
+    @ti.kernel
+    def paint(self):
+        if ti.static(self.dim == 2):
+            for i, j in self.pixels:
+                ii = int(i * self.N / self.N_gui) + self.N_ext
+                jj = int(j * self.N / self.N_gui) + self.N_ext
+                self.pixels[i, j] = self.x[ii, jj] / self.N_tot
+
+
 if __name__ == '__main__':
     ti.init(default_fp=ti.f32, arch=ti.cpu, kernel_profiler=True)
-    solver = MGPCGTest()
+    solver = MGPCGTest1()
     solver.run()
