@@ -185,7 +185,6 @@ class MGPCGTest1(MGPCG):
 
         self.gui = ti.GUI("Multigrid Preconditioned Conjugate Gradients",
                      (self.N_gui, self.N_gui))
-        self.gui.fps_limit = 20
 
         self.init()
         self.solve(400)
@@ -228,7 +227,7 @@ class MGPCGTest1(MGPCG):
 @ti.data_oriented
 class MGPCGTest2(MGPCG):
     def __init__(self):
-        super().__init__(dim=2, N=512, n_mg_levels=6)
+        super().__init__(dim=2, N=128)
 
         self.N_gui = 512  # gui resolution
         self.bound = ti.field(float, (self.N, ) * self.dim)  # boundary conditions
@@ -237,13 +236,12 @@ class MGPCGTest2(MGPCG):
     def run(self):
         self.gui = ti.GUI("Multigrid Preconditioned Conjugate Gradients",
                      (self.N_gui, self.N_gui))
-        self.per_step_callback = print
 
         while self.gui.running and not self.gui.get_event(self.gui.ESCAPE):
             mx, my = self.gui.get_cursor_pos()
             self.touch(mx, my)
             self.init()
-            self.solve(1)
+            self.solve(5)
             self.paint()
             self.gui.set_image(self.pixels)
             self.gui.show()
@@ -260,7 +258,7 @@ class MGPCGTest2(MGPCG):
     @ti.kernel
     def touch(self, x: float, y: float):
         for I in ti.grouped(self.bound):
-            self.bound[I] = 1.0 * ti.exp(-400.0 * (I / self.N - ti.Vector([x, y])).norm_sqr())
+            self.bound[I] = 4.0 * ti.exp(-400.0 * (I / self.N - ti.Vector([x, y])).norm_sqr())
 
     @ti.kernel
     def paint(self):
@@ -273,5 +271,5 @@ class MGPCGTest2(MGPCG):
 
 if __name__ == '__main__':
     ti.init(default_fp=ti.f32, arch=ti.cpu, kernel_profiler=True)
-    solver = MGPCGTest1()
+    solver = MGPCGTest2()
     solver.run()
