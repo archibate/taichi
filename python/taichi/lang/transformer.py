@@ -86,9 +86,33 @@ class ASTTransformerBase(ast.NodeTransformer):
             assert isinstance(node.target, ast.Tuple)
             return [name.id for name in node.target.elts]
 
+    def generic_visit(self, node):
+        for field, old_value in ast.iter_fields(node):
+            if isinstance(old_value, list):
+                new_values = []
+                for value in old_value:
+                    if isinstance(value, ast.AST):
+                        value = self.visit(value)
+                        if value is None:
+                            continue
+                        elif not isinstance(value, ast.AST):
+                            new_values.extend(value)
+                            continue
+                    new_values.append(value)
+                old_value[:] = new_values
+            elif isinstance(old_value, ast.AST):
+                new_node = self.visit(old_value)
+                if new_node is None:
+                    delattr(node, field)
+                else:
+                    setattr(node, field, new_node)
+        return node
 
-# First-pass transform
+
 class ASTTransformerPreprocess(ASTTransformerBase):
+    '''
+    Preprocess Python AST to invocations into Taichi C++ API.
+    '''
     def __init__(self,
                  excluded_paremeters=(),
                  is_kernel=True,
@@ -724,7 +748,6 @@ if 1:
             self.generic_visit(node)
 
         node.body = arg_decls + node.body
-        node.body = [self.parse_stmt('import taichi as ti')] + node.body
         return node
 
     def visit_UnaryOp(self, node):
@@ -844,8 +867,10 @@ if 1:
         return node
 
 
-# Second-pass transform
 class ASTTransformerChecks(ASTTransformerBase):
+    '''
+    End-user sanity check, e.g., function calls.
+    '''
     def __init__(self, func):
         super().__init__(func)
 
@@ -853,4 +878,8 @@ class ASTTransformerChecks(ASTTransformerBase):
         if isinstance(node.func, ast.Name):
             node.args = [node.func] + node.args
             node.func = self.parse_expr('ti.func_call_with_check')
-        return node
+        return self.generic_visit(node)
+
+    def visit_FunctionDef(self, node):
+        node.body = [self.parse_stmt('import taichi as ti')] + node.body
+        return self.generic_visit(node)
